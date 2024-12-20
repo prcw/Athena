@@ -5,10 +5,10 @@
 
 #include "../../resources/color.hpp"
 
-class debug
+class Debug
 {
 public:
-    static __forceinline void allocate_console()
+    static __forceinline void AllocateConsole()
     {
         AllocConsole();
 
@@ -17,20 +17,20 @@ public:
     }
 
     template <typename T>
-    static __forceinline void append_to_stream(std::ostringstream& stream, T&& value)
+    static __forceinline void AppendToStream(std::ostringstream& stream, T&& value)
     {
         stream << std::forward<T>(value);
     }
 
     template <typename T, typename... Args>
-    static __forceinline void append_to_stream(std::ostringstream& stream, T&& first, Args&&... rest)
+    static __forceinline void AppendToStream(std::ostringstream& stream, T&& first, Args&&... rest)
     {
         stream << std::forward<T>(first);
-        append_to_stream(stream, std::forward<Args>(rest)...);
+        AppendToStream(stream, std::forward<Args>(rest)...);
     }
 
     template <typename... Args>
-    static __forceinline void log(Args&&... args)
+    static __forceinline void Log(Args&&... args)
     {
         auto now = std::chrono::system_clock::now();
         auto time = std::chrono::system_clock::to_time_t(now);
@@ -44,10 +44,8 @@ public:
             << '.' << std::setw(3) << std::setfill('0') << milliseconds.count();
 
         std::ostringstream message_stream;
-        append_to_stream(message_stream, std::forward<Args>(args)...);
+        AppendToStream(message_stream, std::forward<Args>(args)...);
 
         std::cout << dye::aqua("[" + timestamp_stream.str() + "] ") << message_stream.str() << std::endl;
     }
 };
-
-
