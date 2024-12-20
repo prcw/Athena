@@ -127,30 +127,6 @@ public:
 
 	template <typename T = UObject*>
 	T& Property(const std::string& Name);
-	//{
-	//	UObject* Return = nullptr;
-
-	//	auto Class = this->ClassPrivate;
-	//	while (Class)
-	//	{
-	//		auto Children = *reinterpret_cast<UObject**>(int64(Class) + 0x38);
-
-	//		while (Children)
-	//		{
-	//			if (Children->GetName() == Name)
-	//			{
-	//				Return = reinterpret_cast<UObject*>(Children);
-	//			}
-
-	//			Children = *reinterpret_cast<UObject**>(int64(Children) + 0x28);
-	//		}
-
-	//		if (Children)
-	//			break;
-	//	}
-
-	//	return *reinterpret_cast<T*>(reinterpret_cast<uint64>(this) + *reinterpret_cast<int*>(reinterpret_cast<uint64>(Return) + 0x44));
-	//}
 
 	template< typename T = void*, int16_t FallbackReturnValueOffset = -1, typename ...Parameters >
 	T Function(const std::string& Name, Parameters... Arguments);

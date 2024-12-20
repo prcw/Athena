@@ -3,8 +3,8 @@
 #include "../../resources/memory.hpp"
 #include "../../resources/minhook/minhook.h"
 
-#define Decl(target, source) target = decltype(target)(source);
+#define Decl(Target, Source) Target = decltype(Target)(Source);
 
-#define Detour(target, detour, original) MH_Initialize(); \
- MH_CreateHook((LPVOID*)(target), detour, (LPVOID*)(&original)); \
- MH_EnableHook((LPVOID*)(target));
+#define Detour(Target, Detour, Original) MH_Initialize(); \
+ MH_CreateHook((LPVOID*)(Target), Detour, (LPVOID*)(&Original)); \
+ MH_EnableHook((LPVOID*)(Target));
