@@ -58,7 +58,7 @@ auto GameplayStatics()
 	return UObject::Object("/Script/Engine.Default__GameplayStatics");
 }
 
-auto SpawnActor(UObject* Class, FVector Location = FVector(), FRotator Rotation = FRotator())
+auto SpawnActor(UObject* Class, FVector Location = FVector(), FRotator Rotation = FRotator(), UObject* Owner = nullptr)
 {
 	FQuat Quat;
 	FTransform Transform;
@@ -84,7 +84,7 @@ auto SpawnActor(UObject* Class, FVector Location = FVector(), FRotator Rotation 
 	Transform.Scale3D = FVector{ 1,1,1 };
 	Transform.Translation = Location;
 
-	auto Actor = GameplayStatics()->Function<UObject*>("BeginDeferredActorSpawnFromClass", World(), Class, Transform, false, nullptr);
+	auto Actor = GameplayStatics()->Function<UObject*>("BeginDeferredActorSpawnFromClass", World(), Class, Transform, false, Owner);
 	return GameplayStatics()->Function<UObject*>("FinishSpawningActor", Actor, Transform);
 }
 
