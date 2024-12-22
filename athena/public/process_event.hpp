@@ -14,29 +14,28 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 	}
 #endif
 
-	if (FunctionName.contains("PostLogin"))
+	if (FunctionName.contains("PostLogin")) // Note: impl original
 	{
-		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters);
+		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters); 
 		Debug::Log("GameMode: ", This->GetFullName(), " accepted NewPlayer: ", NewPlayer->GetFullName());
 	}
 
-	if (FunctionName.contains("ReadyToStartMatch"))
+	if (FunctionName.contains("ReadyToStartMatch")) // Note: impl original
 	{
 		if (!ReadyToStartMatch)
 		{
 			ReadyToStartMatch = true;
 
-			auto GameMode = This;
+			auto GameMode = This; 
 			auto GameState = GameMode->Property("GameState");
 
-			GameState->Property<char>("GamePhase") = 2;
+			GameState->Property<char>("GamePhase") = 2; // Note: unneeded?
 			GameState->Function("OnRep_GamePhase", 0);
 
 			GameState->Property("CurrentPlaylistData") = UObject::Object("/Game/Athena/Playlists/Playlist_DefaultSolo.Playlist_DefaultSolo");
 			GameState->Function("OnRep_CurrentPlaylistData");
 
-			GameMode->Property<bool>("bStartPlayersAsSpectators") = false;
-			GameMode->Property<bool>("bWorldIsReady") = true;
+			GameMode->Property<bool>("bWorldIsReady") = true; // Note: this is a bitfield
 		}
 	}
 
@@ -65,8 +64,8 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 
 		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters); if (!NewPlayer) return Original;
 		Debug::Log("GameMode: ", This->GetFullName(), " is handling the starting NewPlayer : ", NewPlayer->GetFullName());
-
-		NewPlayer->Property<bool>("bHasClientFinishedLoading") = true;
+ 
+		NewPlayer->Property<bool>("bHasClientFinishedLoading") = true; // Note: unneeded? 
 		NewPlayer->Property<bool>("bHasServerFinishedLoading") = true;
 		NewPlayer->Function("OnRep_bHasServerFinishedLoading");
 
