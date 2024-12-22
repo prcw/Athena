@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../utilities/debug.hpp"
+#include "../../resources/memcury.h"
+#include "../../resources/minhook/minhook.h"
 
 #include <windows.h>
 
@@ -37,6 +39,16 @@ public:
 	int32 Num()
 	{
 		return ArrayNum;
+	}
+
+	inline T* begin()
+	{
+		return(T*)(ArrayNum, Data);
+	}
+
+	inline T* end()
+	{
+		return(T*)(ArrayNum, Data + ArrayNum);
 	}
 };
 
@@ -102,7 +114,9 @@ public:
 	FName NamePrivate;
 	UObject* OuterPrivate;
 
-	static inline void (*ProcessEventInternal)(UObject*, UObject*, void*);
+	static inline void* (*ProcessEventInternal)(UObject*, class UFunction*, void*);
+	inline void* ProcessEvent(class UFunction*, void*);
+
 	static inline UObject* (*StaticFindObjectInternal)(UObject*, void*, const wchar_t*, bool);
 	static inline UObject* (*StaticLoadObjectInternal)(UObject*, UObject*, const wchar_t*, const wchar_t*, uint32, void*, bool, void*);
 
@@ -131,7 +145,8 @@ public:
 	template< typename T = void*, int16_t FallbackReturnValueOffset = -1, typename ...Parameters >
 	T Function(const std::string& Name, Parameters... Arguments);
 
-	static inline UObject* Object(std::string Name, bool bFallback = false, 
+	template <typename T = UObject>
+	static inline T* Object(std::string Name, bool bFallback = false,
 		UObject* Class = nullptr, UObject* InOuter = nullptr)
 	{
 		auto Wide = std::wstring(Name.begin(), Name.end());
@@ -141,7 +156,7 @@ public:
 		if (!Return && bFallback)
 			Return = StaticLoadObjectInternal(nullptr, nullptr, Wide.c_str(), nullptr, 0, nullptr, false, nullptr);
 
-		return Return;
+		return (T*)Return;
 	}
 };
 
@@ -187,6 +202,11 @@ public:
 	{
 		return *(int16_t*)(int64_t(this) + 0x90);
 	}
+	
+	void*& Func()
+	{
+		return *reinterpret_cast<void**>(reinterpret_cast<int64>(this) + 0xB0);
+	}
 
 	std::vector<int32> ChildrenOffsets()
 	{
@@ -206,6 +226,11 @@ public:
 		return Return;
 	}
 };
+
+void* UObject::ProcessEvent(UFunction* Function, void* Parameters = nullptr)
+{
+	return ProcessEventInternal(this, Function, Parameters);
+}
 
 template <typename T>
 T& UObject::Property(const std::string& Name)
@@ -282,3 +307,64 @@ T UObject::Function(const std::string& Name, Parameters... args)
 
 	return *reinterpret_cast<T*>(ToParameters.get() + ReturnValueOffset);
 }
+
+struct FVector
+{
+	float X;
+	float Y;
+	float Z;
+
+	bool operator==(const FVector& Vector)
+	{
+		return X == Vector.X && Y == Vector.Y && Z == Vector.Z;
+	}
+
+	auto operator-(FVector A)
+	{
+		return FVector{ this->X - A.X, this->Y - A.Y, this->Z - A.Z };
+	}
+
+	auto operator+(FVector A)
+	{
+		return FVector{ this->X + A.X, this->Y + A.Y, this->Z + A.Z };
+	}
+
+	auto operator!=(FVector A) const
+	{
+		return (this->X != A.X && this->Y != A.Y && this->Z != A.Z);
+	}
+
+	auto operator|(const FVector& V) const
+	{
+		return X * V.X + Y * V.Y + Z * V.Z;
+	}
+
+	operator bool() const
+	{
+		return X != 0 && Y != 0 && Z != 0;
+	}
+};
+
+struct alignas(16) FQuat
+{
+	float X;
+	float Y;
+	float Z;
+	float W;
+};
+
+struct FRotator
+{
+	float Pitch;
+	float Yaw;
+	float Roll;
+};
+
+struct alignas(16) FTransform
+{
+	struct FQuat Rotation;
+	struct FVector Translation;
+	unsigned char UnknownData00[0x4];
+	struct FVector Scale3D;
+	unsigned char UnknownData01[0x4];
+};
