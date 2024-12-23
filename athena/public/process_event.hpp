@@ -69,6 +69,8 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 		NewPlayer->Property<bool>("bHasServerFinishedLoading") = true;
 		NewPlayer->Function("OnRep_bHasServerFinishedLoading");
 
+		// Note: use NewPlayer->PlayerState + StructPropertyOffset to find character parts.
+
 		return Original;
 	}
 
