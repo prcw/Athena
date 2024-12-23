@@ -20,7 +20,7 @@ class FMemory
 {
 public:
 	static inline void (*FreeInternal)(void*);
-	static inline void (*ReallocInternal)(void*);
+	static inline void* (*ReallocInternal)(void*, SIZE_T, uint32);
 };
 
 template <typename T>
@@ -39,6 +39,22 @@ public:
 	int32 Num()
 	{
 		return ArrayNum;
+	}
+
+	void Add(T InputData)
+	{
+		Data = (T*)FMemory::ReallocInternal(Data, sizeof(T) * (ArrayNum + 1), 0);
+		Data[ArrayNum++] = InputData;
+		ArrayMax = ArrayNum;
+	};
+
+	void Add(size_t SizeOfElement, void* ElementPointer)
+	{
+		Data = (T*)FMemory::ReallocInternal(Data, SizeOfElement * (ArrayNum + 1), 0);
+
+		memcpy((Data + ((SizeOfElement - sizeof(T)) * ArrayNum) + ArrayNum++), ElementPointer, SizeOfElement);
+
+		ArrayMax = ArrayNum;
 	}
 
 	inline T* begin()
@@ -145,19 +161,31 @@ public:
 	template< typename T = void*, int16_t FallbackReturnValueOffset = -1, typename ...Parameters >
 	T Function(const std::string& Name, Parameters... Arguments);
 
+	template <typename T = void*>
+	T StaticProperty(const std::string& Name);
+
+	int32 PropertyOffset(const std::string& Name);
+	int32 StructPropertyOffset(const std::string& Name);
+
+	template <typename T>
+	T* GetAtPointer(int32 Offset)
+	{
+		return reinterpret_cast<T*>(reinterpret_cast<int64>(this) + Offset);
+	}
+
 	template <typename T = UObject>
 	static inline T* Object(std::string Name, bool bFallback = false,
 		UObject* Class = nullptr, UObject* InOuter = nullptr)
 	{
 		auto Wide = std::wstring(Name.begin(), Name.end());
 
-		auto Return = StaticFindObjectInternal(nullptr, nullptr, Wide.c_str(), false);
+		auto Return = StaticFindObjectInternal(Class, InOuter, Wide.c_str(), false);
 
 		if (!Return && bFallback)
-			Return = StaticLoadObjectInternal(nullptr, nullptr, Wide.c_str(), nullptr, 0, nullptr, false, nullptr);
+			Return = StaticLoadObjectInternal(Class, InOuter, Wide.c_str(), nullptr, 0, nullptr, false, nullptr);
 
 		return (T*)Return;
-	}
+	};
 };
 
 struct UField : UObject
@@ -230,6 +258,79 @@ public:
 void* UObject::ProcessEvent(UFunction* Function, void* Parameters = nullptr)
 {
 	return ProcessEventInternal(this, Function, Parameters);
+}
+
+template <typename T>
+T UObject::StaticProperty(const std::string& Name)
+{
+	UObject* Child = nullptr;
+	auto Class = reinterpret_cast<UStruct*>(this->ClassPrivate);
+
+	while (Class && !Child)
+	{
+		Child = Object(Name, false, Object("/Script/CoreUObject.Property"), Class);
+		Class = Class->SuperStruct();
+	}
+
+	return Child;
+}
+
+int32 UObject::PropertyOffset(const std::string& Name)
+{
+	UObject* Child = nullptr;
+	auto Class = reinterpret_cast<UStruct*>(this->ClassPrivate);
+
+	while (Class)
+	{
+		auto ChildProperties = Class->ChildProperties();
+
+		while (ChildProperties)
+		{
+			if (ChildProperties->GetName() == Name)
+			{
+				Child = reinterpret_cast<UObject*>(ChildProperties);
+				break;
+			}
+
+			ChildProperties = ChildProperties->Next();
+		}
+
+		if (Child)
+		{
+			break;
+		}
+
+		Class = Class->SuperStruct();
+	}
+
+	return ((UProperty*)Child)->OffsetInternal();
+}
+
+int32 UObject::StructPropertyOffset(const std::string& Name)
+{
+	auto Struct = this;
+
+	if (!Struct)
+		return -1;
+
+	auto Class = reinterpret_cast<UStruct*>(Struct);
+
+	while (Class)
+	{
+		auto ChildProperties = Class->ChildProperties();
+
+		while (ChildProperties)
+		{
+			if (ChildProperties->GetName() == Name)
+			{
+				return ((UProperty*)ChildProperties)->OffsetInternal();
+			}
+
+			ChildProperties = ChildProperties->Next();
+		}
+	}
+
+	return -1;
 }
 
 template <typename T>
@@ -308,6 +409,41 @@ T UObject::Function(const std::string& Name, Parameters... args)
 	return *reinterpret_cast<T*>(ToParameters.get() + ReturnValueOffset);
 }
 
+struct Bitfield
+{
+	uint8 First : 1;
+	uint8 Second : 1;
+	uint8 Third : 1;
+	uint8 Fourth : 1;
+	uint8 Fifth : 1;
+	uint8 Sixth : 1;
+	uint8 Seventh : 1;
+	uint8 Eighth : 1;
+};
+
+uint8 FieldMask(void* Property)
+{
+	return *reinterpret_cast<uint8*>(reinterpret_cast<int64>(Property) + 0x73);
+}
+
+void WriteBitfield(void* Offset, uint8 FieldMask, bool Value)
+{
+	auto Bitfield = reinterpret_cast<uint8*>(Offset);
+
+	if (FieldMask == 0xFF)
+	{
+		*Bitfield = Value ? 0xFF : 0x00;
+	}
+	else
+	{
+		if (Value)
+			*Bitfield |= FieldMask;
+		else
+			*Bitfield &= ~FieldMask;
+	}
+}
+
+
 struct FVector
 {
 	float X;
@@ -367,4 +503,12 @@ struct alignas(16) FTransform
 	unsigned char UnknownData00[0x4];
 	struct FVector Scale3D;
 	unsigned char UnknownData01[0x4];
+};
+
+struct FGuid
+{
+	int A;
+	int B;
+	int C;
+	int D;
 };

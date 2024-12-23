@@ -98,3 +98,79 @@ auto SwitchLevel()
 #endif
 	PlayerController()->Function("SwitchLevel", URL);
 }
+
+class InventoryHandler
+{
+private:
+	__int64* Inventory;
+	UObject* QuickBars;
+	UObject* WorldInventory;
+	UObject* PlayerController;
+
+	struct Item
+	{
+		UObject* ItemDefinition;
+		int Slot;
+		char QuickBar;
+		int Count;
+		int Level;
+	};
+public:
+	void Initialize(UObject* PlayerController)
+	{
+		this->PlayerController = PlayerController;
+		Debug::Log("PlayerController: ", PlayerController->GetFullName());
+
+		this->WorldInventory = PlayerController->Property("WorldInventory");
+		Debug::Log("WorldInventory: ", WorldInventory->GetFullName());
+
+		this->Inventory = &WorldInventory->Property<__int64>("Inventory");
+		Debug::Log("Inventory: ", Inventory);
+
+		this->QuickBars = PlayerController->Property("QuickBars");
+		this->QuickBars = SpawnActor(UObject::Object("/Script/FortniteGame.FortQuickBars"), FVector(), FRotator(), PlayerController);
+		Debug::Log("QuickBars: ", this->QuickBars->GetFullName());
+	}
+
+	std::vector<Item> ItemList;
+
+	void Update()
+	{
+		for (const auto& Item : ItemList)
+		{
+			auto ItemInstance = Item.ItemDefinition->Function<UObject*>("CreateTemporaryItemInstanceBP", Item.Count, Item.Level);
+			Debug::Log("ItemInstance: ", ItemInstance->GetFullName());
+			ItemInstance->Function("SetOwningControllerForTemporaryItem", PlayerController);
+
+			auto ItemEntry = &ItemInstance->Property<void*>("ItemEntry");
+			Debug::Log("ItemEntry: ", ItemEntry);
+
+			auto FortItemEntry = UObject::Object("/Script/FortniteGame.FortItemEntry");
+			auto FortItemEntryCount = (*reinterpret_cast<int*>(reinterpret_cast<__int64>(ItemEntry) + FortItemEntry->StructPropertyOffset("Count")));
+			auto FortItemEntryItemGuid = (*reinterpret_cast<FGuid*>(reinterpret_cast<__int64>(ItemEntry) + FortItemEntry->StructPropertyOffset("ItemGuid")));
+
+			FortItemEntryCount = 1;
+			Debug::Log("FortItemEntryCount: ", FortItemEntryCount);
+
+			auto FortItemList = UObject::Object("/Script/FortniteGame.FortItemList");
+			auto FortItemListItemInstances = *reinterpret_cast<TArray<UObject*>*>(reinterpret_cast<__int64>(Inventory) + FortItemList->StructPropertyOffset("ItemInstances"));
+			auto FortItemListReplicatedEntries = *reinterpret_cast<TArray<UObject*>*>(reinterpret_cast<__int64>(Inventory) + FortItemList->StructPropertyOffset("ReplicatedEntries"));
+
+			FortItemListItemInstances.Add(ItemInstance);
+			Debug::Log("FortItemListItemInstances: ", FortItemListItemInstances.Num());
+
+			FortItemListReplicatedEntries.Add(*(int32*)(int64(UObject::Object(("/Script/FortniteGame.FortItemEntry"))) + 0x40), ItemEntry);
+			Debug::Log("FortItemListReplicatedEntries: ", FortItemListReplicatedEntries.Num());
+
+			QuickBars->Function("ServerAddItemInternal", FortItemEntryItemGuid, Item.QuickBar, Item.Slot);
+		}
+
+		ItemList.clear();
+		WorldInventory->Function("HandleInventoryLocalUpdate");
+		PlayerController->Function("HandleWorldInventoryLocalUpdate");
+		PlayerController->Function("ForceUpdateQuickbar", char(0));
+		PlayerController->Function("ForceUpdateQuickbar", char(1));
+	}
+};
+
+InventoryHandler Inventory;

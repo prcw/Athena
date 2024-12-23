@@ -8,34 +8,45 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 	auto FunctionName = Function->GetName();
 
 #ifdef _DEBUG
-	if (FuncName.contains("BP_PlayButton"))
+	if (FunctionName.contains("BP_PlayButton"))
 	{
 		SwitchLevel();
 	}
 #endif
 
-	if (FunctionName.contains("PostLogin")) // Note: impl original
+	if (FunctionName.contains("PostLogin"))
 	{
-		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters); 
-		Debug::Log("GameMode: ", This->GetFullName(), " accepted NewPlayer: ", NewPlayer->GetFullName());
+		auto GameMode = This;
+		auto Original = GameMode->ProcessEvent(Function, Parameters);
+
+		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters); if (!NewPlayer) return Original;
+		Debug::Log("GameMode: ", GameMode->GetFullName(), " accepted NewPlayer: ", NewPlayer->GetFullName());
+
+		return Original;
 	}
 
-	if (FunctionName.contains("ReadyToStartMatch")) // Note: impl original
+	if (FunctionName.contains("ReadyToStartMatch"))
 	{
 		if (!ReadyToStartMatch)
 		{
 			ReadyToStartMatch = true;
 
 			auto GameMode = This; 
-			auto GameState = GameMode->Property("GameState");
+			auto Original = GameMode->ProcessEvent(Function, Parameters);
 
-			GameState->Property<char>("GamePhase") = 2; // Note: unneeded?
+			auto GameState = GameMode->Property("GameState"); if (!GameState) return Original;
+			GameState->Property<char>("GamePhase") = 2;
 			GameState->Function("OnRep_GamePhase", 0);
-
-			GameState->Property("CurrentPlaylistData") = UObject::Object("/Game/Athena/Playlists/Playlist_DefaultSolo.Playlist_DefaultSolo");
+			
+			auto Playlist = UObject::Object("/Game/Athena/Playlists/Playlist_DefaultSolo.Playlist_DefaultSolo"); if (!Playlist) return Original;
+			GameState->Property("CurrentPlaylistData") = Playlist;
 			GameState->Function("OnRep_CurrentPlaylistData");
 
-			GameMode->Property<bool>("bWorldIsReady") = true; // Note: this is a bitfield
+			auto bWorldIsReadyOffset = GameMode->PropertyOffset("bWorldIsReady");
+			auto bWorldIsReadyBitfield = GameMode->GetAtPointer<Bitfield>(bWorldIsReadyOffset);
+			WriteBitfield(bWorldIsReadyBitfield, 1, true);
+
+			return Original;
 		}
 	}
 
@@ -63,13 +74,16 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 		auto Original = This->ProcessEvent(Function, Parameters);
 
 		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters); if (!NewPlayer) return Original;
+
 		Debug::Log("GameMode: ", This->GetFullName(), " is handling the starting NewPlayer : ", NewPlayer->GetFullName());
- 
-		NewPlayer->Property<bool>("bHasClientFinishedLoading") = true; // Note: unneeded? 
+	
+		auto bHasInitiallySpawnedOffset = NewPlayer->GetAtPointer<Bitfield>(NewPlayer->PropertyOffset("bHasInitiallySpawned"));
+		auto bHasInitiallySpawnedFieldMask = FieldMask(NewPlayer->StaticProperty("bHasInitiallySpawned"));
+		WriteBitfield(bHasInitiallySpawnedOffset, bHasInitiallySpawnedFieldMask, true);
+
+		NewPlayer->Property<bool>("bHasClientFinishedLoading") = true;
 		NewPlayer->Property<bool>("bHasServerFinishedLoading") = true;
 		NewPlayer->Function("OnRep_bHasServerFinishedLoading");
-
-		// Note: use NewPlayer->PlayerState + StructPropertyOffset to find character parts.
 
 		return Original;
 	}
@@ -79,9 +93,17 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 		auto PlayerController = This;
 		auto Original = PlayerController->ProcessEvent(Function, Parameters);
 
-		auto WarmupActors = GameplayStatics()->Function<TArray<UObject*>, 0x10>("GetAllActorsOfClass", World(), UObject::Object("/Script/FortniteGame.FortPlayerStartWarmup"), TArray<UObject*>());
-		auto WarmupActor = WarmupActors.Data[rand() % WarmupActors.Num()];
-		PlayerController->Property("Pawn")->Function(("K2_TeleportTo"), WarmupActor->Function<FVector>(("K2_GetActorLocation")), WarmupActor->Function<FRotator>("K2_GetActorRotation"));
+		auto PlayerState = PlayerController->Property("PlayerState"); if (!PlayerState) return Original;;
+
+		auto Pawn = PlayerController->Property("Pawn"); if (!Pawn) return Original;
+
+		auto WarmupActors = GameplayStatics()->Function<TArray<UObject*>, 0x10>("GetAllActorsOfClass", World(), UObject::Object("/Script/FortniteGame.FortPlayerStartWarmup"), TArray<UObject*>()); if (WarmupActors.Num() < 0) return Original;
+		auto WarmupActor = WarmupActors.Data[rand() % WarmupActors.Num()]; if (!WarmupActor) return Original;
+		Pawn->Function(("K2_TeleportTo"), WarmupActor->Function<FVector>(("K2_GetActorLocation")), WarmupActor->Function<FRotator>("K2_GetActorRotation"));
+
+		Pawn->Function("ServerChoosePart", 0, UObject::Object("/Game/Characters/CharacterParts/Female/Medium/Heads/F_Med_Head1.F_Med_Head1", true));
+		Pawn->Function("ServerChoosePart", 1, UObject::Object("/Game/Characters/CharacterParts/Female/Medium/Bodies/F_Med_Soldier_01.F_Med_Soldier_01", true));
+		PlayerState->Function("OnRep_CharacterParts");
 
 		return Original;
 	}
