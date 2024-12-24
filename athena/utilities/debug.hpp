@@ -32,7 +32,7 @@ public:
     template <typename... Args>
     static __forceinline void Log(Args&&... args)
     {
-//#ifdef _DEBUG
+#ifdef _DEBUG
         auto now = std::chrono::system_clock::now();
         auto time = std::chrono::system_clock::to_time_t(now);
         auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
@@ -48,6 +48,6 @@ public:
         AppendToStream(message_stream, std::forward<Args>(args)...);
 
         std::cout << dye::aqua("[" + timestamp_stream.str() + "] ") << message_stream.str() << std::endl;
-//#endif
+#endif
     }
 };
