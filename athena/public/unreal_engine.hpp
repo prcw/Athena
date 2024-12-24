@@ -16,6 +16,12 @@ typedef unsigned __int16 uint16;
 typedef unsigned __int32 uint32;
 typedef unsigned __int64 uint64;
 
+template <typename T>
+T& GetAtPointer(void* Pointer, int Offset)
+{
+	return *reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(Pointer) + Offset);
+}
+
 class FMemory
 {
 public:
@@ -216,6 +222,11 @@ struct UStruct : public UField
 	{
 		return *reinterpret_cast<UField**>(reinterpret_cast<uintptr_t>(this) + 0x38);
 	}
+
+	int32 Size()
+	{
+		return *reinterpret_cast<int32*>(reinterpret_cast<uintptr_t>(this) + 0x40);
+	}
 };
 
 class UFunction : public UStruct
@@ -313,9 +324,7 @@ int32 UObject::StructPropertyOffset(const std::string& Name)
 	if (!Struct)
 		return -1;
 
-	auto Class = reinterpret_cast<UStruct*>(Struct);
-
-	while (Class)
+	for (auto Class = reinterpret_cast<UStruct*>(Struct); Class; Class = Class->SuperStruct())
 	{
 		auto ChildProperties = Class->ChildProperties();
 

@@ -42,6 +42,7 @@
     <ProjectGuid>{7138e6d9-3882-4ddf-95d7-a07979c7ff19}</ProjectGuid>
     <RootNamespace>athena</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>athena</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

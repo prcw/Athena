@@ -14,17 +14,6 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 	}
 #endif
 
-	if (FunctionName.contains("PostLogin"))
-	{
-		auto GameMode = This;
-		auto Original = GameMode->ProcessEvent(Function, Parameters);
-
-		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters); if (!NewPlayer) return Original;
-		Debug::Log("GameMode: ", GameMode->GetFullName(), " accepted NewPlayer: ", NewPlayer->GetFullName());
-
-		return Original;
-	}
-
 	if (FunctionName.contains("ReadyToStartMatch"))
 	{
 		if (!ReadyToStartMatch)
@@ -63,19 +52,20 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 
 		auto Params = reinterpret_cast<SpawnDefaultPawnForParams*>(Parameters);
 
-		auto NewPawn = SpawnActor(UObject::Object("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C"), FVector(35000, 3500, 3500)); if (!NewPawn) { return Original; }
-		Params->ReturnValue = NewPawn;
+		auto NewPawn = SpawnActor(UObject::Object("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C"), FVector(35000, 3500, 3500)); 
+		if (!NewPawn) { return Original; }
 
+		Params->ReturnValue = NewPawn;
 		return Original;
 	}
 
 	if (FunctionName.contains("HandleStartingNewPlayer"))
 	{
-		auto Original = This->ProcessEvent(Function, Parameters);
+		auto GameMode = This;
+		auto Original = GameMode->ProcessEvent(Function, Parameters);
 
-		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters); if (!NewPlayer) return Original;
-
-		Debug::Log("GameMode: ", This->GetFullName(), " is handling the starting NewPlayer : ", NewPlayer->GetFullName());
+		auto NewPlayer = *reinterpret_cast<UObject**>(Parameters); 
+		if (!NewPlayer) return Original;
 	
 		auto bHasInitiallySpawnedOffset = NewPlayer->GetAtPointer<Bitfield>(NewPlayer->PropertyOffset("bHasInitiallySpawned"));
 		auto bHasInitiallySpawnedFieldMask = FieldMask(NewPlayer->StaticProperty("bHasInitiallySpawned"));
@@ -93,17 +83,36 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 		auto PlayerController = This;
 		auto Original = PlayerController->ProcessEvent(Function, Parameters);
 
-		auto PlayerState = PlayerController->Property("PlayerState"); if (!PlayerState) return Original;;
+		auto PlayerState = PlayerController->Property("PlayerState");
+		if (!PlayerState) return Original;
 
-		auto Pawn = PlayerController->Property("Pawn"); if (!Pawn) return Original;
+		auto Pawn = PlayerController->Property("Pawn");
+		if (!Pawn) return Original;
 
-		auto WarmupActors = GameplayStatics()->Function<TArray<UObject*>, 0x10>("GetAllActorsOfClass", World(), UObject::Object("/Script/FortniteGame.FortPlayerStartWarmup"), TArray<UObject*>()); if (WarmupActors.Num() < 0) return Original;
-		auto WarmupActor = WarmupActors.Data[rand() % WarmupActors.Num()]; if (!WarmupActor) return Original;
-		Pawn->Function(("K2_TeleportTo"), WarmupActor->Function<FVector>(("K2_GetActorLocation")), WarmupActor->Function<FRotator>("K2_GetActorRotation"));
+		auto WarmupActors = GameplayStatics()->Function<TArray<UObject*>, 0x10>(
+			"GetAllActorsOfClass",
+			World(),
+			UObject::Object("/Script/FortniteGame.FortPlayerStartWarmup"),
+			TArray<UObject*>()
+		);
+		if (WarmupActors.Num() <= 0) return Original;
+
+		auto WarmupActor = WarmupActors.Data[rand() % WarmupActors.Num()];
+		if (!WarmupActor) return Original;
+
+		Pawn->Function(
+			"K2_TeleportTo",
+			WarmupActor->Function<FVector>("K2_GetActorLocation"),
+			WarmupActor->Function<FRotator>("K2_GetActorRotation")
+		);
 
 		Pawn->Function("ServerChoosePart", 0, UObject::Object("/Game/Characters/CharacterParts/Female/Medium/Heads/F_Med_Head1.F_Med_Head1", true));
 		Pawn->Function("ServerChoosePart", 1, UObject::Object("/Game/Characters/CharacterParts/Female/Medium/Bodies/F_Med_Soldier_01.F_Med_Soldier_01", true));
 		PlayerState->Function("OnRep_CharacterParts");
+
+	    auto Inventory = new InventoryManager(PlayerController);
+		Inventory->ItemList.push_back({UObject::Object("/Game/Athena/Items/Weapons/WID_Harvest_Pickaxe_Athena_C_T01.WID_Harvest_Pickaxe_Athena_C_T01"), 0, 0, 1 });
+		Inventory->Update();
 
 		return Original;
 	}
