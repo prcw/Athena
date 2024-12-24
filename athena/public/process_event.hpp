@@ -41,8 +41,6 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 
 	if (FunctionName.contains("SpawnDefaultPawnFor"))
 	{
-		auto Original = This->ProcessEvent(Function, Parameters);
-
 		struct SpawnDefaultPawnForParams
 		{
 			UObject* NewPlayer;
@@ -50,9 +48,10 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 			UObject* ReturnValue;
 		};
 
-		auto Params = reinterpret_cast<SpawnDefaultPawnForParams*>(Parameters);
+		auto Params = static_cast<SpawnDefaultPawnForParams*>(Parameters);
+		auto Original = This->ProcessEvent(Function, Params);
 
-		auto NewPawn = SpawnActor(UObject::Object("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C"), FVector(35000, 3500, 3500)); 
+		auto NewPawn = SpawnActor(UObject::Object("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C"), FVector(0, 0, 5000)); 
 		if (!NewPawn) { return Original; }
 
 		Params->ReturnValue = NewPawn;
@@ -84,10 +83,12 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 		auto Original = PlayerController->ProcessEvent(Function, Parameters);
 
 		auto PlayerState = PlayerController->Property("PlayerState");
-		if (!PlayerState) return Original;
+		if (!PlayerState)
+			return Original;
 
 		auto Pawn = PlayerController->Property("Pawn");
-		if (!Pawn) return Original;
+		if (!Pawn)
+			return Original;
 
 		auto WarmupActors = GameplayStatics()->Function<TArray<UObject*>, 0x10>(
 			"GetAllActorsOfClass",
@@ -95,10 +96,12 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 			UObject::Object("/Script/FortniteGame.FortPlayerStartWarmup"),
 			TArray<UObject*>()
 		);
-		if (WarmupActors.Num() <= 0) return Original;
+		if (WarmupActors.Num() <= 0)
+			return Original;
 
 		auto WarmupActor = WarmupActors.Data[rand() % WarmupActors.Num()];
-		if (!WarmupActor) return Original;
+		if (!WarmupActor)
+			return Original;
 
 		Pawn->Function(
 			"K2_TeleportTo",
@@ -106,13 +109,49 @@ inline void* ProcessEvent(UObject* This, UFunction* Function, void* Parameters)
 			WarmupActor->Function<FRotator>("K2_GetActorRotation")
 		);
 
-		Pawn->Function("ServerChoosePart", 0, UObject::Object("/Game/Characters/CharacterParts/Female/Medium/Heads/F_Med_Head1.F_Med_Head1", true));
-		Pawn->Function("ServerChoosePart", 1, UObject::Object("/Game/Characters/CharacterParts/Female/Medium/Bodies/F_Med_Soldier_01.F_Med_Soldier_01", true));
+		Pawn->Function("ServerChoosePart", 0,
+			UObject::Object("/Game/Characters/CharacterParts/Female/Medium/Heads/F_Med_Head1.F_Med_Head1", true));
+		Pawn->Function("ServerChoosePart", 1,
+			UObject::Object("/Game/Characters/CharacterParts/Female/Medium/Bodies/F_Med_Soldier_01.F_Med_Soldier_01", true));
 		PlayerState->Function("OnRep_CharacterParts");
 
-	    auto Inventory = new InventoryManager(PlayerController);
-		Inventory->ItemList.push_back({UObject::Object("/Game/Athena/Items/Weapons/WID_Harvest_Pickaxe_Athena_C_T01.WID_Harvest_Pickaxe_Athena_C_T01"), 0, 0, 1 });
+		auto Inventory = new InventoryManager(PlayerController);
+
+		auto CustomizationLoadout = &PlayerController->Property<int64*>("CustomizationLoadout");
+		Inventory->ItemList.push_back({ GetAtPointer<UObject*>(
+			GetAtPointer<UObject*>(
+			CustomizationLoadout,
+			UObject::Object<UStruct>("/Script/FortniteGame.FortAthenaLoadout")
+			->StructPropertyOffset("Pickaxe")
+		),
+			UObject::Object<UStruct>("/Script/FortniteGame.AthenaPickaxeItemDefinition")
+			->StructPropertyOffset("WeaponDefinition")
+		), 0, 0, 1 });
+
 		Inventory->Update();
+
+		return Original;
+	}
+
+	if (FunctionName.contains("ServerAttemptAircraftJump"))
+	{
+		auto PlayerController = This;
+
+		auto NewPawn = SpawnActor(UObject::Object("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C"), 
+			PlayerController->Function<UObject*>("GetViewTarget")->Function<FVector>("K2_GetActorLocation"), *reinterpret_cast<FRotator*>(Parameters));
+		PlayerController->Function("Possess", NewPawn);
+
+		auto Inventory = InventoryManager(PlayerController);
+		Inventory.Equip(Inventory.GetItemInstances().Data[0]->Function<FGuid>("GetItemGuid"));
+	}
+
+	if (FunctionName.contains("ServerExecuteInventoryItem"))
+	{
+		auto PlayerController = This;
+		auto Original = PlayerController->ProcessEvent(Function, Parameters);
+
+		auto Inventory = InventoryManager(PlayerController);
+		Inventory.Equip(*reinterpret_cast<FGuid*>(Parameters));
 
 		return Original;
 	}

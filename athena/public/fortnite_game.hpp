@@ -99,63 +99,96 @@ auto SwitchLevel()
 	PlayerController()->Function("SwitchLevel", URL);
 }
 
-class InventoryManager
-{
+class InventoryManager {
 private:
-	__int64* Inventory;
-	UObject* QuickBars;
-	UObject* WorldInventory;
-	UObject* PlayerController;
+    UObject* QuickBars;
+    UObject* WorldInventory;
+    UObject* PlayerController;
 
-	struct ItemBatch
-	{
-		UObject* ItemDefinition;
-		int Slot;
-		char InQuickBar;
-		int Count;
-		int Level;
-	};
+    struct ItemBatch {
+        UObject* ItemDefinition;
+        int Slot;
+        char InQuickBar;
+        int Count;
+        int Level;
+    };
+
 public:
-	InventoryManager(UObject* PlayerController)
-	{
-		this->PlayerController = PlayerController;
+    InventoryManager(UObject* PlayerController) {
+        this->PlayerController = PlayerController;
+        this->QuickBars = SpawnActor(UObject::Object("/Script/FortniteGame.FortQuickBars"));
+        this->PlayerController->Property("QuickBars") = this->QuickBars;
+        this->QuickBars->Function("SetOwner", PlayerController);
+        this->WorldInventory = GetWorldInventory();
+    }
 
-		this->QuickBars = SpawnActor(UObject::Object("/Script/FortniteGame.FortQuickBars"));
-		this->PlayerController->Property("QuickBars") = this->QuickBars;
-		this->QuickBars->Function("SetOwner", PlayerController);
+    std::vector<ItemBatch> ItemList;
 
-		this->WorldInventory = PlayerController->Property("WorldInventory");
-	}
+    // Retrieve the WorldInventory property
+    UObject* GetWorldInventory() {
+        return PlayerController->Property("WorldInventory");
+    }
 
-	std::vector<ItemBatch> ItemList;
+    // Retrieve the Inventory pointer from WorldInventory
+    __int64* GetInventory() {
+        return &WorldInventory->Property<__int64>("Inventory");
+    }
 
-	void Update()
-	{
-		for (const auto& Item : ItemList)
-		{
-			auto Count = Item.Count;
-			auto ItemInstance = Item.ItemDefinition->Function<UObject*>("CreateTemporaryItemInstanceBP", Item.Count, Item.Level);
-			ItemInstance->Function("SetOwningControllerForTemporaryItem", PlayerController);
+    // Retrieve ItemInstances from the Inventory
+    TArray<UObject*> GetItemInstances() {
+        auto Inventory = GetInventory();
+        auto FortItemList = UObject::Object<UStruct>("/Script/FortniteGame.FortItemList");
+        return GetAtPointer<TArray<UObject*>>(Inventory, FortItemList->StructPropertyOffset("ItemInstances"));
+    }
 
-			auto ItemEntry = &ItemInstance->Property<void*>("ItemEntry");
-			auto FortItemEntry = UObject::Object<UStruct>("/Script/FortniteGame.FortItemEntry");
-			GetAtPointer<int>(ItemEntry, FortItemEntry->StructPropertyOffset("Count")) = 1;
+    void Equip(FGuid Guid) {
+        auto ItemInstances = GetItemInstances();
 
-			auto Inventory = &WorldInventory->Property<__int64>("Inventory");
-			auto FortItemList = UObject::Object<UStruct>("/Script/FortniteGame.FortItemList");
-			GetAtPointer<TArray<UObject*>>(Inventory, FortItemList->StructPropertyOffset("ItemInstances")).Add(ItemInstance);
-			GetAtPointer<TArray<UObject*>>(Inventory, FortItemList->StructPropertyOffset("ReplicatedEntries")).Add(FortItemEntry->Size(), ItemEntry);
+        for (auto ItemInstance : ItemInstances) {
+            if (!ItemInstance) continue;
 
-			PlayerController->Property("QuickBars")->Function(
-				"ServerAddItemInternal",
-				GetAtPointer<FGuid>(ItemEntry, FortItemEntry->StructPropertyOffset("ItemGuid")),
-				Item.InQuickBar,
-				Item.Slot
-			);
-		}
+            auto ItemEntry = &ItemInstance->Property<void*>("ItemEntry");
+            auto FortItemEntry = UObject::Object<UStruct>("/Script/FortniteGame.FortItemEntry");
+            auto ItemGuid = GetAtPointer<FGuid>(ItemEntry, FortItemEntry->StructPropertyOffset("ItemGuid"));
 
-		ItemList.clear();
-		WorldInventory->Function("HandleInventoryLocalUpdate");
-		PlayerController->Function("OnRep_QuickBar");
-	}
+            if (!UObject::Object("/Script/Engine.Default__KismetGuidLibrary")->Function<bool>("EqualEqual_GuidGuid", ItemGuid, Guid))
+                continue;
+
+            auto Pawn = PlayerController->Property("Pawn");
+            auto ItemDefinition = ItemInstance->Function("GetItemDefinitionBP");
+
+            if (Pawn && ItemDefinition) {
+                auto Weapon = Pawn->Function<UObject*>("EquipWeaponDefinition", ItemDefinition, Guid);
+                Weapon->Property<int32>("AmmoCount") = ItemInstance->Function<int32>("GetLoadedAmmo");
+                break;
+            }
+        }
+    }
+
+    void Update() {
+        for (const auto& Item : ItemList) {
+            auto ItemInstance = Item.ItemDefinition->Function<UObject*>("CreateTemporaryItemInstanceBP", Item.Count, Item.Level);
+            ItemInstance->Function("SetOwningControllerForTemporaryItem", PlayerController);
+
+            auto ItemEntry = &ItemInstance->Property<void*>("ItemEntry");
+            auto FortItemEntry = UObject::Object<UStruct>("/Script/FortniteGame.FortItemEntry");
+            GetAtPointer<int>(ItemEntry, FortItemEntry->StructPropertyOffset("Count")) = 1;
+
+            auto Inventory = GetInventory();
+            auto FortItemList = UObject::Object<UStruct>("/Script/FortniteGame.FortItemList");
+            GetAtPointer<TArray<UObject*>>(Inventory, FortItemList->StructPropertyOffset("ItemInstances")).Add(ItemInstance);
+            GetAtPointer<TArray<UObject*>>(Inventory, FortItemList->StructPropertyOffset("ReplicatedEntries")).Add(FortItemEntry->Size(), ItemEntry);
+
+            PlayerController->Property("QuickBars")->Function(
+                "ServerAddItemInternal",
+                GetAtPointer<FGuid>(ItemEntry, FortItemEntry->StructPropertyOffset("ItemGuid")),
+                Item.InQuickBar,
+                Item.Slot
+            );
+        }
+
+        ItemList.clear();
+        WorldInventory->Function("HandleInventoryLocalUpdate");
+        PlayerController->Function("OnRep_QuickBar");
+    }
 };
