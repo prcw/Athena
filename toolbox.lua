@@ -6,9 +6,15 @@ local supported_places = {
 
 local place = supported_places[game.PlaceId]
 
-if not place then return end 
-if not firetouchinterest then return end 
+if not place then return {} end
+if not firetouchinterest then return {} end
 
-local gs = function(sv)
+local toolbox = {}
+
+toolbox.place = place
+
+toolbox.gs = function(sv)
 	return game:GetService(sv)
 end
+
+return toolbox
